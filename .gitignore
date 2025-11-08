@@ -1,0 +1,25 @@
+# Dependencies installed via Composer
+/vendor/
+
+# Local configuration files with sensitive data
+/smtp_config.php
+/sendgrid_config.php
+/brevo_config.php
+
+# Uploaded files directory
+/uploads/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

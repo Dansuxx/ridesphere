@@ -1,0 +1,23 @@
+<?php
+// Copy this to brevo_config.php and fill with your Brevo (SendinBlue) API key and sender details.
+// Do NOT commit your brevo_config.php with real credentials.
+
+$BREVO_CONFIG = [
+    // Set to true to enable sending via Brevo
+    'enabled' => false,
+
+    // Brevo (SendinBlue) API key - create in your Brevo dashboard
+    'api_key' => 'YOUR_BREVO_API_KEY',
+
+    // Sender identity - verify this sender in your Brevo account
+    'from_email' => 'no-reply@yourdomain.com',
+    'from_name' => 'Ridesphere',
+
+    // Optional subject
+    'subject' => 'Verify your Ridesphere email',
+
+    // Optional tracking (handled server-side by Brevo if enabled in account)
+    'tracking_enabled' => false,
+    'tracking_clicks' => true,
+    'tracking_opens' => true,
+];

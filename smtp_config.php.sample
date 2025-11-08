@@ -1,0 +1,20 @@
+<?php
+// Copy this file to smtp_config.php and fill in your SMTP provider credentials.
+// Do NOT commit your real smtp_config.php with credentials to source control.
+
+$SMTP_CONFIG = [
+    // Set to true to enable sending via PHPMailer/SMTP
+    'enabled' => false,
+
+    // SMTP server settings
+    'host' => 'smtp.example.com',
+    'port' => 587,
+    'smtp_auth' => true,
+    'username' => 'your-smtp-username',
+    'password' => 'your-smtp-password',
+    // 'smtp_secure' => 'tls', // or 'ssl', leave unset to auto-select based on port
+
+    // From address shown in verification emails
+    'from_email' => 'no-reply@ridesphere.example',
+    'from_name' => 'Ridesphere',
+];
