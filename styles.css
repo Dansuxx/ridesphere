@@ -51,6 +51,7 @@ body {
 /* Enhanced Header */
 header {
   background: rgba(30, 41, 59, 0.95);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   #toastContainer .toast {
       font-family: var(--font-family, Arial, sans-serif);
@@ -116,6 +117,7 @@ header {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
 }
 
@@ -157,6 +159,7 @@ header {
 
 .login-box {
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   padding: 2rem;
   border-radius: var(--card-radius);
@@ -724,10 +727,11 @@ header {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 22000;
   padding: 1rem;
 }
 
@@ -755,6 +759,89 @@ header {
   opacity: 1;
 }
 
+/* OTP modal specific styling to match attached design */
+/* OTP modal specific styling to match provided screenshot */
+#otpModal .modal-content {
+  max-width: 420px;
+  padding: 2.5rem 2rem;
+  background: #ffffff; /* white card */
+  color: #0b1220; /* dark text on white */
+  border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(2,6,23,0.35);
+  text-align: center;
+}
+
+#otpModal .modal-content h2 {
+  color: #0f172a;
+  margin: 0 0 8px 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+#otpModal .modal-content p { color: #6b7280; margin: 0 0 10px 0; }
+
+#otpModal .otp-box {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 20px !important;
+  border: 1px solid #e6eef8 !important;
+  background: #ffffff !important;
+  color: #0b1220 !important;
+  border-radius: 8px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+/* Single-field OTP input (six digits) */
+#otpModal #otpInput {
+  width: 100%;
+  max-width: 360px;
+  height: 56px;
+  font-size: 28px;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 14px;
+  border: 2px solid #e6eef8;
+  background: #ffffff;
+  color: #0b1220;
+  border-radius: 8px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  -webkit-appearance: none;
+}
+
+#otpModal #otpInput::placeholder {
+  letter-spacing: 10px;
+  color: #c7d2da;
+}
+
+/* spacing between boxes */
+#otpBoxesContainer { gap: 0.9rem !important; }
+
+/* Primary verify button: dark rounded pill */
+#otpModal .btn.primary {
+  background: #243746; /* dark navy/charcoal */
+  color: white;
+  border-radius: 28px;
+  padding: 0.9rem 1.25rem;
+  font-size: 1rem;
+  box-shadow: 0 6px 18px rgba(36,55,70,0.18);
+}
+
+#otpModal .btn.primary:hover { filter: brightness(1.03); }
+
+#otpModal .modal-content .resend-link,
+#otpModal #resendCountdown { 
+  color: #9ca3af; 
+  font-weight: 600; 
+  font-size: 0.9rem;
+}
+
+#otpModal #resendCountdown { margin-top: 6px; }
+
 /* Toast container polish */
 #toastContainer {
   right: 1rem;
@@ -764,6 +851,15 @@ header {
 #toastContainer .toast {
   min-width: 220px;
   padding: 0.75rem 1rem;
+
+/* Accessibility helper: visually-hidden (for screen readers) */
+.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
+}
   border-radius: 10px;
   box-shadow: 0 8px 30px rgba(2,6,23,0.45);
 }

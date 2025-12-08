@@ -5,139 +5,12 @@ header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
 require_once 'db.php';
-// Composer autoload for SendinBlue SDK and dependencies
-if (file_exists(__DIR__ . '/vendor/autoload.php')) {
-    require_once __DIR__ . '/vendor/autoload.php';
-}
-
-// Helper: ensure a verified sender exists for the given fromEmail. If a verified sender exists, return ['sender'=>...].
-// If not, create a sender via Senders API which will trigger a verification email to that address and return ['requires_verification'=>true, 'sender_id'=>...]
-function ensureVerifiedSenderOrCreate($cfg, $fromEmail, $fromName) {
-    try {
-        if (!class_exists('\Brevo\\Client\\Configuration')) {
-            return ['error' => 'Brevo SDK not available'];
-        }
-        $configSB = \Brevo\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $cfg['api_key']);
-        $sendersApi = new \Brevo\Client\Api\SendersApi(new \GuzzleHttp\Client(), $configSB);
-
-        // Attempt to find an active sender that matches the fromEmail
-        $domain = substr(strrchr($fromEmail, '@'), 1);
-        try {
-            $list = $sendersApi->getSenders(null, $domain);
-        } catch (Exception $e) {
-            // fallback: try without domain filter
-            try { $list = $sendersApi->getSenders(); } catch (Exception $e2) { throw $e2; }
-        }
-
-        $arr = json_decode(json_encode($list), true);
-        if (isset($arr['senders']) && is_array($arr['senders'])) {
-            foreach ($arr['senders'] as $s) {
-                if (isset($s['email']) && strcasecmp($s['email'], $fromEmail) === 0 && (!isset($s['active']) || $s['active'] === true)) {
-                    return ['sender' => $s];
-                }
-            }
-        }
-
-        // If we get here, no active sender found. Create one which triggers verification email to the address.
-        $create = new \Brevo\Client\Model\CreateSender(['name' => $fromName, 'email' => $fromEmail]);
-        $created = $sendersApi->createSender($create);
-        $createdArr = json_decode(json_encode($created), true);
-        $senderId = $createdArr['id'] ?? null;
-        return ['requires_verification' => true, 'sender_id' => $senderId, 'create_response' => $createdArr];
-    } catch (\Brevo\Client\ApiException $e) {
-        error_log('ensureVerifiedSenderOrCreate ApiException: ' . $e->getMessage());
-        return ['error' => 'api_exception', 'message' => $e->getMessage(), 'body' => $e->getResponseBody()];
-    } catch (Exception $e) {
-        error_log('ensureVerifiedSenderOrCreate error: ' . $e->getMessage());
-        return ['error' => 'exception', 'message' => $e->getMessage()];
-    }
-}
-
-// Action: list existing senders via API and return them
-function listSendersAction($db, $data) {
-    try {
-        if (empty($GLOBALS['BREVO_CONFIG']) || empty($GLOBALS['BREVO_CONFIG']['enabled'])) {
-            echo json_encode(['success' => false, 'message' => 'Brevo not enabled']);
-            return;
-        }
-        $cfg = $GLOBALS['BREVO_CONFIG'];
-        $configSB = \Brevo\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $cfg['api_key']);
-        $sendersApi = new \Brevo\Client\Api\SendersApi(new \GuzzleHttp\Client(), $configSB);
-        $domain = $data['domain'] ?? null;
-        $result = $sendersApi->getSenders(null, $domain);
-        echo json_encode(['success' => true, 'senders' => json_decode(json_encode($result), true)]);
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
-}
-
-// Action: create a sender (triggers verification email to the provided address)
-function createSenderAction($db, $data) {
-    try {
-        if (empty($GLOBALS['BREVO_CONFIG']) || empty($GLOBALS['BREVO_CONFIG']['enabled'])) {
-            echo json_encode(['success' => false, 'message' => 'Brevo not enabled']);
-            return;
-        }
-        $fromEmail = $data['email'] ?? ($GLOBALS['BREVO_CONFIG']['from_email'] ?? null);
-        $fromName = $data['name'] ?? ($GLOBALS['BREVO_CONFIG']['from_name'] ?? 'Ridesphere');
-        if (empty($fromEmail)) { echo json_encode(['success'=>false,'message'=>'email required']); return; }
-        $cfg = $GLOBALS['BREVO_CONFIG'];
-        $configSB = \Brevo\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $cfg['api_key']);
-        $sendersApi = new \Brevo\Client\Api\SendersApi(new \GuzzleHttp\Client(), $configSB);
-        $create = new \Brevo\Client\Model\CreateSender(['name' => $fromName, 'email' => $fromEmail]);
-        $created = $sendersApi->createSender($create);
-        echo json_encode(['success' => true, 'created' => json_decode(json_encode($created), true)]);
-    } catch (\Brevo\Client\ApiException $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage(), 'body' => $e->getResponseBody()]);
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
-}
-
-// Action: validate sender by OTP (user supplies sender_id and otp)
-function validateSenderOtpAction($db, $data) {
-    try {
-        if (empty($GLOBALS['BREVO_CONFIG']) || empty($GLOBALS['BREVO_CONFIG']['enabled'])) {
-            echo json_encode(['success' => false, 'message' => 'Brevo not enabled']);
-            return;
-        }
-        $senderId = $data['sender_id'] ?? null;
-        $otp = $data['otp'] ?? null;
-        if (empty($senderId) || empty($otp)) { echo json_encode(['success'=>false,'message'=>'sender_id and otp required']); return; }
-        $cfg = $GLOBALS['BREVO_CONFIG'];
-        $configSB = \Brevo\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $cfg['api_key']);
-        $sendersApi = new \Brevo\Client\Api\SendersApi(new \GuzzleHttp\Client(), $configSB);
-        $otpModel = new \Brevo\Client\Model\Otp(['otp' => $otp]);
-        $result = $sendersApi->validateSenderByOTP($senderId, $otpModel);
-        echo json_encode(['success' => true, 'result' => json_decode(json_encode($result), true)]);
-    } catch (\Brevo\Client\ApiException $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage(), 'body' => $e->getResponseBody()]);
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
-}
-
-// Brevo (SendinBlue) config
-if (file_exists(__DIR__ . '/brevo_config.php')) {
-    require_once __DIR__ . '/brevo_config.php';
-} else {
-    $BREVO_CONFIG = ['enabled' => false];
-}
+require_once 'sendEmailViaPHPMailer.php';
 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Support GET verification link clicks
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'verify_email') {
-    $database = new Database();
-    $db = $database->getConnection();
-    if (!$db) {
-        echo json_encode(["success" => false, "message" => "Database connection failed"]);
-        exit;
-    }
-    verifyEmail($db, $_GET);
-    exit(0);
-}
+// Legacy GET-based email verification removed. Use OTP flow instead.
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = file_get_contents("php://input");
@@ -159,26 +32,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'signup':
             signup($db, $data);
             break;
-        case 'list_senders':
-            listSendersAction($db, $data);
-            break;
-        case 'create_sender':
-            createSenderAction($db, $data);
-            break;
-        case 'validate_sender_otp':
-            validateSenderOtpAction($db, $data);
-            break;
+        // Backwards-compatibility: map legacy 'send_verification' action to OTP flow
         case 'send_verification':
-            sendVerification($db, $data);
-            break;
-        case 'verify_email':
-            verifyEmail($db, $data);
+            // This used to send a verification link. We now send a 6-digit OTP instead.
+            sendOTPToEmailAction($db, $data);
             break;
         case 'login':
             login($db, $data);
             break;
         case 'update_profile':
             updateProfile($db, $data);
+            break;
+        case 'send_otp_to_email':
+            sendOTPToEmailAction($db, $data);
+            break;
+        case 'verify_otp_for_email':
+            verifyOTPForEmailAction($db, $data);
             break;
         default:
             echo json_encode(["success" => false, "message" => "Invalid action: " . $action]);
@@ -189,157 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(["success" => false, "message" => "Invalid request method"]);
 }
 
-function sendVerification($db, $data) {
-    try {
-        $email = isset($data['email']) ? trim($data['email']) : '';
-        if (empty($email)) {
-            echo json_encode(["success" => false, "message" => "email is required"]);
-            return;
-        }
 
-        // ensure users table has email column
-        $colCheckQ = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'email'";
-        $colRow = $db->query($colCheckQ)->fetch(PDO::FETCH_ASSOC);
-        $hasEmailColumn = ($colRow && intval($colRow['cnt']) > 0);
-        if (!$hasEmailColumn) {
-            echo json_encode(["success" => false, "message" => "Email verification not supported on legacy DB"]);
-            return;
-        }
-
-        $q = "SELECT id, email_verified FROM users WHERE email = :email";
-        $s = $db->prepare($q);
-        $s->execute([':email' => $email]);
-        $user = $s->fetch(PDO::FETCH_ASSOC);
-        if (!$user) {
-            echo json_encode(["success" => false, "message" => "User not found"]);
-            return;
-        }
-
-        // generate token and expiry
-        $token = bin2hex(random_bytes(16));
-        $expires = date('Y-m-d H:i:s', time() + 24 * 60 * 60);
-        $updQ = "UPDATE users SET verification_token = :token, verification_expires = :expires, email_verified = 0 WHERE id = :id";
-        $upd = $db->prepare($updQ);
-        $upd->execute([':token' => $token, ':expires' => $expires, ':id' => $user['id']]);
-
-        $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . dirname($_SERVER['REQUEST_URI']);
-        $link = rtrim($base, '/') . '/auth.php?action=verify_email&token=' . $token;
-
-        $email_content = "Please verify your email by clicking the link: " . $link;
-
-        $sent = false;
-            if (!empty($GLOBALS['BREVO_CONFIG']) && !empty($GLOBALS['BREVO_CONFIG']['enabled'])) {
-                $cfg = $GLOBALS['BREVO_CONFIG'];
-                try {
-                    $fromEmail = $cfg['from_email'] ?? 'no-reply@ridesphere.local';
-                    $fromName = $cfg['from_name'] ?? 'Ridesphere';
-                    $subject = $cfg['subject'] ?? 'Verify your Ridesphere email';
-                
-                    // Prefer the maintained Brevo SDK; otherwise fall back to PHP mail
-                    if (class_exists('\Brevo\\Client\\Configuration')) {
-                        // Ensure we have a verified sender available in Brevo. If not, create one and instruct the caller to verify it.
-                        $senderCheck = ensureVerifiedSenderOrCreate($cfg, $fromEmail, $fromName);
-                        if (isset($senderCheck['requires_verification']) && $senderCheck['requires_verification']) {
-                            // Do not attempt to send until sender is verified; return instructions to the caller.
-                            echo json_encode(["success" => false, "message" => "Sender email requires verification", "sender_info" => $senderCheck]);
-                            return;
-                        }
-
-                        $configSB = \Brevo\Client\Configuration::getDefaultConfiguration()->setApiKey('api-key', $cfg['api_key']);
-                        $apiInstance = new \Brevo\Client\Api\TransactionalEmailsApi(new \GuzzleHttp\Client(), $configSB);
-                        $sendSmtpEmail = new \Brevo\Client\Model\SendSmtpEmail([
-                            'subject' => $subject,
-                            'textContent' => $email_content,
-                            'sender' => ['name' => $fromName, 'email' => $fromEmail],
-                            'to' => [[ 'email' => $email ]]
-                        ]);
-                        try {
-                            $resp = $apiInstance->sendTransacEmail($sendSmtpEmail);
-                            // Log response for debugging — Brevo may return details useful for delivery troubleshooting
-                            error_log('Brevo send response: ' . print_r($resp, true));
-                            $sent = true;
-                        } catch (\Brevo\Client\ApiException $ae) {
-                            // ApiException contains response body with details
-                            $body = $ae->getResponseBody();
-                            error_log('Brevo ApiException: ' . $ae->getMessage() . ' body: ' . print_r($body, true));
-                            $sent = false;
-                        } catch (Exception $e) {
-                            error_log('Brevo send exception: ' . $e->getMessage());
-                            $sent = false;
-                        }
-                    } else {
-                        error_log('Brevo SDK not installed; falling back to mail() and returning the verification link in JSON for manual testing.');
-                        $sent = false;
-                    }
-            } catch (Exception $e) {
-                error_log('Brevo/Send error: ' . $e->getMessage());
-                $sent = false;
-            }
-        } else {
-            // fallback to PHP mail for local/dev
-            $fromEmail = $GLOBALS['BREVO_CONFIG']['from_email'] ?? 'no-reply@ridesphere.local';
-            $headers = 'From: ' . $fromEmail . "\r\n" . 'Reply-To: ' . $fromEmail . "\r\n";
-            $subject = $GLOBALS['BREVO_CONFIG']['subject'] ?? 'Verify your Ridesphere email';
-            if (@mail($email, $subject, $email_content, $headers)) {
-                $sent = true;
-            }
-        }
-
-        // Optionally include Brevo SDK debug output in the response when configured (local testing only)
-        $brevo_debug = null;
-        $response = ["success" => true, "message" => "Verification sent", "verification_link" => $link];
-        if ($sent && !empty($GLOBALS['BREVO_CONFIG']['enabled'])) {
-            unset($response['verification_link']);
-        }
-        if (!empty($GLOBALS['BREVO_CONFIG']['debug'])) {
-            // Attempt to include any SDK response captured earlier
-            if (isset($resp)) {
-                $response['brevo_response'] = print_r($resp, true);
-            }
-        }
-
-        echo json_encode($response);
-    } catch (Exception $e) {
-        error_log('sendVerification error: ' . $e->getMessage());
-        echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
-    }
-}
-
-function verifyEmail($db, $data) {
-    try {
-        $token = '';
-        if (isset($data['token'])) $token = $data['token'];
-        else if (isset($_GET['token'])) $token = $_GET['token'];
-        $token = trim($token);
-        if (empty($token)) {
-            echo json_encode(["success" => false, "message" => "token is required"]);
-            return;
-        }
-
-        $q = "SELECT id, verification_expires FROM users WHERE verification_token = :token";
-        $s = $db->prepare($q);
-        $s->execute([':token' => $token]);
-        $user = $s->fetch(PDO::FETCH_ASSOC);
-        if (!$user) {
-            echo json_encode(["success" => false, "message" => "Invalid token"]);
-            return;
-        }
-
-        if (!empty($user['verification_expires']) && strtotime($user['verification_expires']) < time()) {
-            echo json_encode(["success" => false, "message" => "Token expired"]);
-            return;
-        }
-
-        $updQ = "UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = :id";
-        $upd = $db->prepare($updQ);
-        $upd->execute([':id' => $user['id']]);
-
-        echo json_encode(["success" => true, "message" => "Email verified"]);
-    } catch (Exception $e) {
-        error_log('verifyEmail error: ' . $e->getMessage());
-        echo json_encode(["success" => false, "message" => "Error: " . $e->getMessage()]);
-    }
-}
 
 // signup, updateProfile, login unchanged from previous implementation
 function signup($db, $data) {
@@ -353,6 +72,7 @@ function signup($db, $data) {
         $username = $data['username'] ?? '';
         $password = $data['password'] ?? '';
         $role = $data['role'] ?? 'renter';
+        $email_verified = isset($data['email_verified']) && $data['email_verified'] ? 1 : 0;
 
         if(empty($first_name) || empty($last_name) || empty($email) || empty($password)) {
             echo json_encode(["success" => false, "message" => "All required fields must be filled (first name, last name, email, password)"]);
@@ -432,12 +152,9 @@ function signup($db, $data) {
             throw new Exception("Password hashing failed");
         }
 
-        $verification_token = null;
-        $verification_expires = null;
         if ($hasEmailColumn) {
-            $verification_token = bin2hex(random_bytes(16));
-            $verification_expires = date('Y-m-d H:i:s', time() + 24 * 60 * 60);
-            $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, email, username, password, role) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :email, :username, :password, :role)";
+            // Use provided email_verified flag (set to true by OTP flow when applicable)
+            $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, email, username, password, role, email_verified) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :email, :username, :password, :role, :email_verified)";
             $stmt = $db->prepare($query);
             $result = $stmt->execute([
                 ':first_name' => $first_name,
@@ -448,7 +165,8 @@ function signup($db, $data) {
                 ':email' => $email,
                 ':username' => $usernameToUse,
                 ':password' => $hashed_password,
-                ':role' => $role
+                ':role' => $role,
+                ':email_verified' => $email_verified
             ]);
         } else {
             $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, username, password, role) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :username, :password, :role)";
@@ -466,16 +184,7 @@ function signup($db, $data) {
         }
 
         if ($result) {
-            if ($hasEmailColumn) {
-                try {
-                    $userId = $db->lastInsertId();
-                    $updQ = "UPDATE users SET verification_token = :token, verification_expires = :expires, email_verified = 0 WHERE id = :id";
-                    $upd = $db->prepare($updQ);
-                    $upd->execute([':token' => $verification_token, ':expires' => $verification_expires, ':id' => $userId]);
-                } catch (Exception $e) {
-                    error_log('Failed to store verification token: ' . $e->getMessage());
-                }
-            }
+            // No legacy verification token logic — email verification is handled via OTP flow.
             echo json_encode(["success" => true, "message" => "Account created successfully!"]);
         } else {
             echo json_encode(["success" => false, "message" => "Failed to create account"]);
@@ -622,6 +331,143 @@ function login($db, $data) {
     } catch(PDOException $e) {
         error_log("Login PDO error: " . $e->getMessage());
         echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
+    }
+}
+
+function sendOTPToEmailAction($db, $data) {
+    require_once 'sendEmailViaPHPMailer.php';
+    
+    try {
+        $email = isset($data['email']) ? trim($data['email']) : '';
+        
+        if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(["success" => false, "message" => "Valid email is required"]);
+            return;
+        }
+        
+        // Create otp_pending_emails table if it doesn't exist
+        $db->exec("CREATE TABLE IF NOT EXISTS otp_pending_emails (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            otp_code VARCHAR(6) NOT NULL,
+            otp_expires DATETIME NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        // Generate OTP
+        $otp = generateOTP();
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+        
+        // Store OTP in database (upsert)
+        $stmt = $db->prepare("INSERT INTO otp_pending_emails (email, otp_code, otp_expires) 
+                             VALUES (:email, :otp, :expires)
+                             ON DUPLICATE KEY UPDATE otp_code = :otp, otp_expires = :expires");
+        $stmt->execute([
+            ':email' => $email,
+            ':otp' => $otp,
+            ':expires' => $expiresAt
+        ]);
+        
+        // Send OTP email
+        $result = sendOTPEmail($email, $otp);
+        
+        if ($result['success']) {
+            // Return success and the email so the frontend can reliably open the OTP modal
+            echo json_encode(["success" => true, "message" => "OTP sent to $email", "email" => $email]);
+        } else {
+            // Return a clean error message. Do not emit internal debug information to the client by default.
+            echo json_encode(["success" => false, "message" => $result['message'] ?? "Failed to send OTP"]);
+        }
+        
+    } catch(Exception $e) {
+        error_log("sendOTPToEmailAction error: " . $e->getMessage());
+        echo json_encode(["success" => false, "message" => "Error sending OTP: " . $e->getMessage()]);
+    }
+}
+
+function verifyOTPForEmailAction($db, $data) {
+    try {
+        $email = isset($data['email']) ? trim($data['email']) : '';
+        // Normalize email to avoid accidental whitespace/casing issues
+        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+        $otp = isset($data['otp']) ? trim($data['otp']) : '';
+        
+        if (empty($email) || empty($otp)) {
+            echo json_encode(["success" => false, "message" => "Email and OTP are required"]);
+            return;
+        }
+        
+        // Verify OTP from database
+        // Use case-insensitive lookup to avoid failures due to email casing
+        $stmt = $db->prepare("SELECT otp_code, otp_expires FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email)");
+        $stmt->execute([':email' => $email]);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$record) {
+            echo json_encode(["success" => false, "message" => "OTP not found for this email"]);
+            return;
+        }
+        
+        // Check if OTP is expired
+        if (strtotime($record['otp_expires']) < time()) {
+            // Delete expired OTP
+            // Delete expired OTP (case-insensitive)
+            $deleteStmt = $db->prepare("DELETE FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email)");
+            $deleteStmt->execute([':email' => $email]);
+            echo json_encode(["success" => false, "message" => "OTP has expired"]);
+            return;
+        }
+        
+        // Verify OTP code
+        if ($record['otp_code'] !== $otp) {
+            echo json_encode(["success" => false, "message" => "Invalid OTP code"]);
+            return;
+        }
+        
+        // Delete the OTP after successful verification (single-use)
+        // Delete the OTP after successful verification (single-use, case-insensitive)
+        $deleteStmt = $db->prepare("DELETE FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email)");
+        $deleteStmt->execute([':email' => $email]);
+
+        // If there is a users record for this email, mark email_verified = 1
+        try {
+            // Check if 'users' table has email_verified column
+            $colCheckQ = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'email_verified'";
+            $colStmt = $db->query($colCheckQ);
+            $colRow = $colStmt->fetch(PDO::FETCH_ASSOC);
+            $hasEmailVerified = ($colRow && intval($colRow['cnt']) > 0);
+
+            // Also check for otp_code and otp_expires columns in users table
+            $colCheckQ2 = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('otp_code', 'otp_expires')";
+            $cols = [];
+            foreach ($db->query($colCheckQ2) as $r) {
+                $cols[] = $r['COLUMN_NAME'];
+            }
+
+            if ($hasEmailVerified) {
+                // Build an update statement depending on available columns
+                $updateParts = ['email_verified = 1'];
+                $params = [':email' => $email];
+                if (in_array('otp_code', $cols)) {
+                    $updateParts[] = 'otp_code = NULL';
+                }
+                if (in_array('otp_expires', $cols)) {
+                    $updateParts[] = 'otp_expires = NULL';
+                }
+                $updateSql = 'UPDATE users SET ' . implode(', ', $updateParts) . ' WHERE LOWER(email) = LOWER(:email)';
+                $updStmt = $db->prepare($updateSql);
+                $updStmt->execute($params);
+            }
+        } catch (Exception $e) {
+            // Non-fatal: log and continue
+            error_log('Post-OTP user update failed: ' . $e->getMessage());
+        }
+
+        echo json_encode(["success" => true, "message" => "OTP verified successfully"]);
+        
+    } catch(Exception $e) {
+        error_log("verifyOTPForEmailAction error: " . $e->getMessage());
+        echo json_encode(["success" => false, "message" => "Error verifying OTP: " . $e->getMessage()]);
     }
 }
 ?>

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Ridesphere • Car Rental Platform</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Add crossorigin to reduce credentialed requests which can trigger Tracking Prevention -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css"/>
 </head>
@@ -34,36 +36,44 @@
       <p style="color: #94a3b8;">Create your account in seconds</p>
     </div>
     
-    <div class="form-grid">
+      <div class="form-grid">
       <div class="form-group">
-        <input type="text" id="firstName" class="form-input" placeholder="First Name *" required>
+        <label for="firstName" class="visually-hidden">First name</label>
+        <input type="text" id="firstName" name="firstName" class="form-input" placeholder="First Name *" autocomplete="given-name" required>
       </div>
       <div class="form-group">
-        <input type="text" id="middleName" class="form-input" placeholder="Middle Name">
+        <label for="middleName" class="visually-hidden">Middle name</label>
+        <input type="text" id="middleName" name="middleName" class="form-input" placeholder="Middle Name" autocomplete="additional-name">
       </div>
       <div class="form-group">
-        <input type="text" id="lastName" class="form-input" placeholder="Last Name *" required>
+        <label for="lastName" class="visually-hidden">Last name</label>
+        <input type="text" id="lastName" name="lastName" class="form-input" placeholder="Last Name *" autocomplete="family-name" required>
       </div>
     </div>
     
     <div class="form-group">
-      <input type="tel" id="phoneNumber" class="form-input" placeholder="Phone Number">
+      <label for="phoneNumber" class="visually-hidden">Phone number</label>
+      <input type="tel" id="phoneNumber" name="phoneNumber" class="form-input" placeholder="Phone Number" autocomplete="tel">
     </div>
     
     <div class="form-group">
-      <input type="text" id="address" class="form-input" placeholder="Complete Address">
+      <label for="address" class="visually-hidden">Address</label>
+      <input type="text" id="address" name="address" class="form-input" placeholder="Complete Address" autocomplete="street-address">
     </div>
     
     <div class="form-group">
-      <input type="email" id="newEmail" class="form-input" placeholder="Email address *" required>
+      <label for="newEmail" class="visually-hidden">Email address</label>
+      <input type="email" id="newEmail" name="newEmail" class="form-input" placeholder="Email address *" autocomplete="email" required>
     </div>
 
     <div class="form-group">
-      <input type="password" id="newPassword" class="form-input" placeholder="Create Password *" required>
+      <label for="newPassword" class="visually-hidden">Create password</label>
+      <input type="password" id="newPassword" name="newPassword" class="form-input" placeholder="Create Password *" autocomplete="new-password" required>
     </div>
-    
+
     <div class="form-group">
-      <select id="newRole" class="form-select" required>
+      <label for="newRole" class="visually-hidden">Account role</label>
+      <select id="newRole" name="newRole" class="form-select" aria-label="Account role" required>
         <option value="renter">🚗 Renter - I want to rent vehicles</option>
         <option value="owner">💼 Owner - I want to list my vehicles</option>
       </select>
@@ -90,11 +100,13 @@
       </div>
       
       <div class="form-group">
-        <input type="email" id="email" class="form-input" placeholder="Email" required>
+        <label for="email" class="visually-hidden">Email address</label>
+        <input type="email" id="email" name="email" class="form-input" placeholder="Email" autocomplete="username" required>
       </div>
       
       <div class="form-group">
-        <input type="password" id="password" class="form-input" placeholder="Password" required>
+        <label for="password" class="visually-hidden">Password</label>
+        <input type="password" id="password" name="password" class="form-input" placeholder="Password" autocomplete="current-password" required>
       </div>
       
       <button class="btn primary" onclick="login()" style="width: 100%; margin-bottom: 1rem;">
@@ -130,12 +142,12 @@
         <!-- Main Renter Interface -->
         <div class="renter-main-interface">
           <div class="renter-quick-actions">
-            <div class="renter-action-card" onclick="showVehiclesView()">
+            <div class="renter-action-card" role="button" tabindex="0" onclick="showVehiclesView()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); this.click(); }" aria-label="View available vehicles" title="View available vehicles">
               <div class="renter-action-icon">🚗</div>
               <h3>View Vehicles</h3>
               <p>Browse and book available vehicles from our network of trusted owners</p>
             </div>
-            <div class="renter-action-card" onclick="showBookingsView()">
+            <div class="renter-action-card" role="button" tabindex="0" onclick="showBookingsView()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); this.click(); }" aria-label="View your bookings" title="View your bookings">
               <div class="renter-action-icon">📋</div>
               <h3>Booked Vehicles</h3>
               <p>Manage your current bookings and view your rental history</p>
@@ -193,17 +205,17 @@
 
           <!-- Quick Actions -->
           <div class="quick-actions">
-            <div class="action-card" onclick="showVehicleForm()">
+            <div class="action-card" role="button" tabindex="0" onclick="showVehicleForm()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); this.click(); }" aria-label="Add new vehicle" title="Add new vehicle">
               <div class="icon">🚗</div>
               <h3>Add New Vehicle</h3>
               <p>List a new vehicle for rent</p>
             </div>
-            <div class="action-card" onclick="showAllVehicles()">
+            <div class="action-card" role="button" tabindex="0" onclick="showAllVehicles()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); this.click(); }" aria-label="View all vehicles" title="View all vehicles">
               <div class="icon">📋</div>
               <h3>All Vehicles</h3>
               <p>View all your vehicles</p>
             </div>
-            <div class="action-card" onclick="showOwnerBookings()">
+            <div class="action-card" role="button" tabindex="0" onclick="showOwnerBookings()" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); this.click(); }" aria-label="Manage bookings" title="Manage bookings">
               <div class="icon">📅</div>
               <h3>Bookings</h3>
               <p>Manage reservations</p>
@@ -276,7 +288,8 @@
                   <img id="previewImg" src="" alt="Preview" style="width:100%; height:100%; object-fit:cover; display:block;">
                 </div>
                 <div style="flex:1;">
-                  <input type="file" id="vehicleImageInput" accept="image/*" onchange="previewImage(this)" />
+                  <label for="vehicleImageInput" class="visually-hidden">Upload vehicle image</label>
+                  <input type="file" id="vehicleImageInput" name="vehicleImageInput" accept="image/*" onchange="previewImage(this)" aria-label="Upload vehicle image" title="Upload vehicle image" />
                   <div style="color:#94a3b8; font-size:0.85rem; margin-top:0.5rem;">Optional image — will be stored as base64 in the DB.</div>
                 </div>
               </div>
@@ -332,7 +345,8 @@
                   <img id="editPreviewImg" src="" alt="Preview" style="width:100%; height:100%; object-fit:cover; display:block;">
                 </div>
                 <div style="flex:1;">
-                  <input type="file" id="editVehicleImageInput" accept="image/*" onchange="previewEditImage(this)" />
+                  <label for="editVehicleImageInput" class="visually-hidden">Edit vehicle image</label>
+                  <input type="file" id="editVehicleImageInput" name="editVehicleImageInput" accept="image/*" onchange="previewEditImage(this)" aria-label="Edit vehicle image" title="Edit vehicle image" />
                   <div style="color:#94a3b8; font-size:0.85rem; margin-top:0.5rem;">Choose a new image to replace the current one (optional).</div>
                 </div>
               </div>
@@ -356,7 +370,7 @@
     <div class="modal-content vehicle-details-modal">
       <div class="modal-header">
         <h3 class="modal-title" id="vehicleModalTitle">Vehicle Details</h3>
-        <button class="close" onclick="closeVehicleDetails()">×</button>
+        <button class="close" onclick="closeVehicleDetails()" title="Close" aria-label="Close">×</button>
       </div>
       <div class="modal-body">
         <div id="vehicleModalContent"></div>
@@ -369,7 +383,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3 class="modal-title" id="modalName">Vehicle Details</h3>
-        <button class="close" onclick="closeModal()">×</button>
+        <button class="close" onclick="closeModal()" title="Close" aria-label="Close">×</button>
       </div>
           <div class="modal-body">
         <div style="display: grid; gap: 1rem;">
@@ -386,14 +400,16 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3 class="modal-title" id="messageHeader">Chat with Owner</h3>
-        <button class="close" onclick="closeMessageModal()">×</button>
+        <button class="close" onclick="closeMessageModal()" title="Close chat" aria-label="Close chat">×</button>
       </div>
       <div class="modal-body">
         <div id="messageThread" class="message-thread"></div>
         <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <input type="text" id="messageInput" class="form-input" placeholder="Type your message..." style="flex: 1;">
-          <button class="btn primary" id="sendMessageBtn">
-            <i class="fas fa-paper-plane"></i>
+          <label for="messageInput" class="visually-hidden">Message</label>
+          <input type="text" id="messageInput" class="form-input" placeholder="Type your message..." style="flex: 1;" aria-label="Type your message">
+          <button class="btn primary" id="sendMessageBtn" aria-label="Send message" title="Send message">
+            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+            <span class="visually-hidden">Send message</span>
           </button>
         </div>
       </div>
@@ -404,8 +420,8 @@
 <div id="bookingModal" class="modal hidden">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 class="modal-title">Book Vehicle</h3>
-            <button class="close" onclick="closeBookingModal()">×</button>
+          <h3 class="modal-title">Book Vehicle</h3>
+          <button class="close" onclick="closeBookingModal()" title="Close booking" aria-label="Close booking">×</button>
         </div>
         <div class="modal-body">
             <div style="margin-bottom: 1.5rem;">
@@ -440,14 +456,42 @@
     </div>
 </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20251208"></script>
+  <!-- Fallback loader: if CDN is blocked by browser tracking prevention, try to load a local copy -->
+  <script>
+    (function(){
+      // After a short delay, verify whether the Font Awesome stylesheet is present.
+      setTimeout(function(){
+        try {
+          var found = false;
+          for(var i=0;i<document.styleSheets.length;i++){
+            var ss = document.styleSheets[i];
+            if(ss && ss.href && ss.href.indexOf('cdnjs.cloudflare.com/ajax/libs/font-awesome') !== -1){ found = true; break; }
+          }
+          if(!found){
+            console.warn('Font Awesome CDN stylesheet not detected. Attempting to load local fallback `vendor/fontawesome/css/all.min.css`.');
+            var l = document.createElement('link');
+            l.rel = 'stylesheet';
+            l.href = 'vendor/fontawesome/css/all.min.css';
+            l.onload = function(){ console.log('Local Font Awesome fallback loaded.'); };
+            l.onerror = function(){ console.warn('Local Font Awesome fallback failed to load. Consider downloading Font Awesome files into `vendor/fontawesome/`.'); };
+            document.head.appendChild(l);
+          } else {
+            console.log('Font Awesome CDN stylesheet loaded.');
+          }
+        } catch (e) {
+          console.warn('Error checking Font Awesome stylesheet:', e);
+        }
+      }, 800);
+    })();
+  </script>
   <!-- editProfileModal removed -->
   <!-- Confirmation Modal -->
   <div id="confirmModal" class="modal hidden">
     <div class="modal-content confirm-modal">
       <div class="modal-header">
         <h3 id="confirmTitle">Confirm action</h3>
-        <button class="close" onclick="closeConfirm(false)">×</button>
+        <button class="close" onclick="closeConfirm(false)" title="Close" aria-label="Close">×</button>
       </div>
       <div class="modal-body" id="confirmBody">
         <!-- message inserted here -->
@@ -464,7 +508,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3 class="modal-title">Your Profile</h3>
-        <button class="close" onclick="closeProfileModal()">×</button>
+        <button class="close" onclick="closeProfileModal()" title="Close profile" aria-label="Close profile">×</button>
       </div>
       <div class="modal-body">
         <div id="profileContent" style="display:grid; gap:0.5rem;"></div>
@@ -475,5 +519,73 @@
       </div>
     </div>
   </div>
+
+  <!-- OTP Verification Modal -->
+  <div id="otpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="otpModalTitle">
+    <div class="modal-content" style="max-width: 450px; background: white;">
+      <div style="text-align: center; padding: 2.5rem 2rem;">
+        <!-- Icon -->
+        <div style="margin-bottom: 1.5rem;">
+          <i class="fas fa-envelope" style="font-size: 3rem; color: #667eea; opacity: 0.8;"></i>
+        </div>
+        
+        <!-- Title -->
+        <h2 style="color: #333; margin: 0 0 0.5rem 0; font-size: 1.5rem;">OTP Verification</h2>
+        
+        <!-- Subtitle with email -->
+        <p style="color: #666; font-size: 0.95rem; margin: 0 0 1.5rem 0;" id="otpEmailContainer">
+          One Time Password (OTP) has been sent via Email to<br>
+          <strong style="color: #333;" id="otpEmailDisplay">your email</strong>
+        </p>
+        
+        <!-- Instructions -->
+        <p style="color: #888; font-size: 0.9rem; margin: 0 0 2rem 0;">Enter the OTP below to verify it.</p>
+        
+        <!-- OTP Input Boxes -->
+        <form id="otpForm" autocomplete="off" onsubmit="return false;">
+          <div id="otpBoxesContainer" style="display: flex; justify-content: center; gap: 0.75rem; margin-bottom: 1.5rem;" role="group" aria-label="6-digit verification code">
+            <input id="otpInput" name="otpInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="______" aria-label="6-digit verification code" style="width:100%; max-width:360px; height:56px; font-size:28px; text-align:center; letter-spacing:14px; border: 2px solid #e2e8f0; border-radius: 8px; font-weight: 700; color: #111; font-family: 'Courier New', monospace; background: #fff; box-shadow: 0 2px 6px rgba(15,23,42,0.04);">
+          </div>
+        </form>
+        
+        <!-- Resend Timer -->
+        <p id="resendCountdown" style="color: #999; font-size: 0.9rem; margin: 0 0 1.5rem 0; display: none;">Resend OTP in <span id="resendTime">00:00</span></p>
+        
+        <!-- Verify Button -->
+        <button id="verifyOTPBtn" class="btn primary" onclick="verifyOTP()" type="button" style="width: 100%; padding: 0.75rem 1.5rem; font-weight: 600; margin-bottom: 1rem;">
+          Verify OTP
+        </button>
+        
+        <!-- Resend Link -->
+        <button class="btn secondary" id="resendOTPBtn" onclick="resendOTP()" type="button" style="width: 100%; padding: 0.75rem 1.5rem; font-weight: 600; display: none;">
+          Resend OTP
+        </button>
+        
+        <!-- Close Button -->
+        <button id="cancelOTPBtn" onclick="closeOTPModal()" type="button" style="background: none; border: none; color: #999; cursor: pointer; margin-top: 1rem; font-size: 0.9rem; text-decoration: underline;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .otp-box:focus {
+      border-color: #667eea !important;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .otp-box:hover {
+      border-color: #cbd5e0;
+    }
+    
+    /* Single OTP input focus */
+    #otpInput:focus {
+      border-color: #667eea !important;
+      outline: none;
+      box-shadow: 0 0 0 6px rgba(102, 126, 234, 0.06);
+    }
+  </style>
 </body>
 </html>

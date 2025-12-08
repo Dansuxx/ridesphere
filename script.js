@@ -48,14 +48,7 @@ async function apiCall(endpoint, data = {}) {
     }
 }
 
-// ----- SCREEN SWITCHES -----
-function showSignup(){
-    console.log("Showing signup screen");
-    // Hide other screens and show signup only
-    const choice = document.getElementById("choiceScreen"); if (choice) choice.classList.add("hidden");
-    const login = document.getElementById("loginScreen"); if (login) login.classList.add("hidden");
-    document.getElementById("signupScreen").classList.remove("hidden");
-}
+ 
 
 function showLogin(){
     console.log("Showing login screen");
@@ -63,6 +56,15 @@ function showLogin(){
     const choice = document.getElementById("choiceScreen"); if (choice) choice.classList.add("hidden");
     const signup = document.getElementById("signupScreen"); if (signup) signup.classList.add("hidden");
     document.getElementById("loginScreen").classList.remove("hidden");
+}
+
+function showSignup(){
+    console.log("Showing signup screen");
+    // Hide other screens and show signup only
+    const choice = document.getElementById("choiceScreen"); if (choice) choice.classList.add("hidden");
+    const login = document.getElementById("loginScreen"); if (login) login.classList.add("hidden");
+    const main = document.getElementById("mainApp"); if (main) main.classList.add("hidden");
+    const signup = document.getElementById("signupScreen"); if (signup) signup.classList.remove("hidden");
 }
 
 function backToChoice(){
@@ -89,6 +91,13 @@ function backToChoice(){
 async function signup(event){
     if (event) event.preventDefault();
     console.log("Starting signup process");
+    // Prevent duplicate submissions: simple in-flight guard
+    if (window.__signupOTPRequestInFlight) {
+        console.warn('Signup already in progress - ignoring duplicate request');
+        notify('Signup already in progress. Please wait...', 'info');
+        return;
+    }
+    window.__signupOTPRequestInFlight = true;
     
     // Safe getter to avoid runtime errors when an expected DOM element is missing.
     function getInputValue(id) {
@@ -116,68 +125,71 @@ async function signup(event){
         return; 
     }
 
+    // Store signup data for later account creation after OTP verification
+    window.pendingSignup = { firstName, middleName, lastName, phoneNumber, address, email, password, role };
+
     // Show loading state
     const signupBtn = document.querySelector('#signupScreen .btn.primary');
     const originalText = signupBtn ? signupBtn.innerHTML : '';
     if (signupBtn) {
-        signupBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Creating Account...';
+        signupBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Sending OTP...';
         signupBtn.disabled = true;
     }
 
     try {
-        const result = await apiCall('auth.php', {
-            action: 'signup',
-            firstName,
-            middleName,
-            lastName,
-            phoneNumber,
-            address,
-            email,
-            password,
-            role
+        // Send OTP to email first (start request then show modal immediately)
+        const callPromise = apiCall('auth.php', {
+            action: 'send_otp_to_email',
+            email
         });
 
-        if(result.success) {
-            notify("Account created successfully! You can now login.", 'success');
-            // Prefill the login username and show login screen
-            const newUserEmail = document.getElementById('newEmail')?.value || '';
-            const emailEl = document.getElementById('email'); if (emailEl) emailEl.value = newUserEmail;
-            // Send verification email (will return a link for local testing)
-            try {
-                const ver = await apiCall('auth.php', { action: 'send_verification', email: newUserEmail });
-                if (ver && ver.success) {
-                    console.log('Verification link:', ver.verification_link);
-                    notify('Verification email sent. For local testing, link printed to console.', 'info');
-                    // Optionally show link in a confirm dialog or display area
-                } else {
-                    console.warn('send_verification response:', ver);
-                }
-            } catch (e) {
-                console.error('Error sending verification:', e);
-            }
-            // clear signup fields (defensive)
-            const idsToClear = ['firstName','middleName','lastName','phoneNumber','address','newEmail','newPassword'];
-            idsToClear.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-                else console.warn(`signup: cannot clear missing element #${id}`);
-            });
-            // Show login screen and focus password
-            showLogin();
-            const passwordInput = document.getElementById('password');
-            if (passwordInput) passwordInput.focus();
+        // Immediately show the OTP modal as a UX improvement so user can enter code
+        // (it will also act as a fallback during delivery failures)
+        try { showOTPModalForSignup(email); } catch (e) { console.warn('showOTPModalForSignup failed early:', e); }
+
+        const result = await callPromise;
+
+        console.log('send_otp_to_email response:', result);
+
+        if(result && result.success) {
+            const targetEmail = (result.email && result.email.length) ? result.email : email;
+            notify("OTP sent to " + targetEmail, 'success');
+            // Ensure modal shows the server-provided email
+            try { document.getElementById('otpEmailDisplay').textContent = targetEmail; } catch (e) {}
         } else {
-            notify("Error: " + (result.message || "Unknown error occurred"), 'error');
+            notify("Error: " + (result && result.message ? result.message : "Failed to send OTP"), 'error');
+            // show an inline banner inside the modal for clarity
+            try {
+                const modal = document.getElementById('otpModal');
+                if (modal) {
+                    let banner = document.getElementById('otpErrorBanner');
+                    if (!banner) {
+                        banner = document.createElement('div');
+                        banner.id = 'otpErrorBanner';
+                        banner.style.background = '#fff3f2';
+                        banner.style.color = '#7f1d1d';
+                        banner.style.padding = '8px 12px';
+                        banner.style.borderRadius = '8px';
+                        banner.style.marginTop = '12px';
+                        banner.style.textAlign = 'center';
+                        const content = modal.querySelector('.modal-content');
+                        if (content) content.insertBefore(banner, content.querySelector('#otpBoxesContainer'));
+                    }
+                    banner.textContent = 'We could not send the OTP email. You can enter a test OTP here or try Resend.';
+                }
+            } catch (e) { console.error('Failed to show OTP error banner:', e); }
         }
     } catch (error) {
         console.error('Signup error:', error);
-        notify("An unexpected error occurred during signup: " + error.message, 'error');
+        notify("An unexpected error occurred: " + error.message, 'error');
     } finally {
         // Restore button state
         if (signupBtn) {
             signupBtn.innerHTML = originalText;
             signupBtn.disabled = false;
         }
+        // Clear in-flight guard
+        window.__signupOTPRequestInFlight = false;
     }
 }
 
@@ -220,20 +232,6 @@ async function login(){
             updateHeaderUser();
             showDashboard();
             
-        } else if (result && result.requires_verification) {
-            // Block login and offer resend
-            notify("Your email address is not verified. A verification email has been sent.", 'warning');
-            try {
-                const ver = await apiCall('auth.php', { action: 'send_verification', email: email });
-                if (ver && ver.success) {
-                    console.log('Verification link:', ver.verification_link);
-                    notify('Verification email resent. For local testing, check console for the link.', 'info');
-                } else {
-                    console.warn('send_verification failed:', ver);
-                }
-            } catch (e) {
-                console.error('Error resending verification:', e);
-            }
         } else {
             const errorMsg = result?.message || "Invalid email or password";
             console.error("Login failed:", errorMsg);
@@ -1302,7 +1300,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const createBtn = document.getElementById('createAccountBtn');
         if (createBtn) {
             createBtn.addEventListener('click', function(e){
-                console.log('Create Account button clicked (listener)');
+                try {
+                    // Prevent any default form behaviors and start signup flow
+                    e.preventDefault();
+                    console.log('Create Account button clicked - invoking signup()');
+                    signup(e);
+                } catch (err) {
+                    console.error('Error in create account click handler:', err);
+                }
             });
         }
     } catch (e) {
@@ -2043,6 +2048,369 @@ function closeConfirm(result) {
 }
 
 // Export functions for global access (for browser console debugging)
+// OTP Modal and functions
+const otpState = {
+    email: null,
+    isSignupFlow: false,
+    resendTimer: null,
+    resendCooldown: 0
+};
+// Ensure OTP listeners are initialized only once
+let __otpListenersInitialized = false;
+
+function showOTPModalForSignup(email) {
+    console.log('showOTPModalForSignup called with email:', email);
+    otpState.email = email;
+    otpState.isSignupFlow = true;
+    
+    const modal = document.getElementById('otpModal');
+    if (!modal) {
+        console.error('OTP modal not found in DOM');
+        return;
+    }
+
+    // Temporary debug overlay: visible even if modal is somehow hidden by CSS
+    try {
+        let dbg = document.getElementById('otpDebugOverlay');
+        if (!dbg) {
+            dbg = document.createElement('div');
+            dbg.id = 'otpDebugOverlay';
+            dbg.style.position = 'fixed';
+            dbg.style.right = '12px';
+            dbg.style.top = '12px';
+            dbg.style.background = 'rgba(220,38,38,0.95)';
+            dbg.style.color = 'white';
+            dbg.style.padding = '10px 14px';
+            dbg.style.borderRadius = '8px';
+            dbg.style.zIndex = '10000000';
+            dbg.style.fontWeight = '700';
+            dbg.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            dbg.style.pointerEvents = 'none';
+            document.body.appendChild(dbg);
+        }
+        dbg.textContent = 'OTP modal opened for ' + (email || '(no email)');
+        // auto-remove after 6s
+        setTimeout(() => {
+            const el = document.getElementById('otpDebugOverlay');
+            if (el) el.remove();
+        }, 6000);
+    } catch (e) { console.warn('Could not create otp debug overlay', e); }
+
+    // Set email display
+    const emailDisplay = document.getElementById('otpEmailDisplay');
+    if (emailDisplay) {
+        emailDisplay.textContent = email;
+    }
+
+    // Clear single OTP input
+    const otpInput = document.getElementById('otpInput');
+    if (otpInput) otpInput.value = '';
+
+    // Reset resend button and start countdown
+    resetResendButton();
+    startResendCountdown();
+
+    // Move modal to document.body to avoid being clipped by other containers
+    try { if (modal.parentNode !== document.body) document.body.appendChild(modal); } catch (e) {}
+    // Make visible: remove the 'hidden' marker first, then add 'open'
+    modal.classList.remove('hidden');
+    // also ensure inline display in case CSS classes are overridden
+    try {
+        // Force inline styles to ensure visibility in stubborn environments
+        modal.style.display = 'flex';
+        modal.style.visibility = 'visible';
+        modal.style.zIndex = '999999';
+        modal.style.pointerEvents = 'auto';
+    } catch (e) { console.warn('Could not apply inline modal styles', e); }
+    // small delay to ensure CSS reflow so transition plays
+    window.requestAnimationFrame(() => {
+        modal.classList.add('open');
+    });
+
+    // Prevent background scroll while modal open
+    try { document.body.style.overflow = 'hidden'; } catch (e) {}
+
+    // Ensure input enabled and attach single-input listeners
+    try { if (otpInput) { otpInput.disabled = false; if (otpInput.removeAttribute) otpInput.removeAttribute('disabled'); } } catch (e) {}
+    setupOTPSingleListener();
+    if (otpInput) {
+        // focus after a short timeout to ensure modal is visible
+        setTimeout(() => otpInput.focus(), 120);
+    }
+    // set aria attributes for accessibility
+    modal.setAttribute('aria-hidden', 'false');
+    // Debug: print computed style to help diagnose CSS overrides
+    try {
+        const cs = window.getComputedStyle(modal);
+        console.log('otpModal classList after open:', modal.className, 'inline style.display=', modal.style.display, 'computed display=', cs.display, 'computed visibility=', cs.visibility, 'computed zIndex=', cs.zIndex);
+    } catch (e) {
+        console.log('otpModal classList after open:', modal.className, 'style.display=', modal.style.display);
+    }
+    // Force modal-content visible (in case transitions or CSS keep it hidden)
+    try {
+        const content = modal.querySelector('.modal-content');
+        if (content) {
+            content.style.opacity = '1';
+            content.style.transform = 'translateY(0) scale(1)';
+            content.style.visibility = 'visible';
+            content.style.zIndex = '1000001';
+            content.style.pointerEvents = 'auto';
+            const cs2 = window.getComputedStyle(content);
+            console.log('otpModal .modal-content computed display=', cs2.display, 'opacity=', cs2.opacity, 'visibility=', cs2.visibility, 'zIndex=', cs2.zIndex);
+        } else {
+            console.warn('otpModal modal-content not found');
+        }
+    } catch (e) {
+        console.warn('Failed to force modal-content styles', e);
+    }
+}
+
+// Expose a quick helper for debugging: open OTP modal from console
+window.Ridesphere = window.Ridesphere || {};
+window.Ridesphere.forceOpenOTP = function(email = '') {
+    try {
+        if (!email) {
+            const v = prompt('Email to show in OTP modal (for testing):');
+            if (!v) return;
+            email = v.trim();
+        }
+        showOTPModalForSignup(email);
+    } catch (e) {
+        console.error('forceOpenOTP failed:', e);
+    }
+};
+
+function closeOTPModal() {
+    const modal = document.getElementById('otpModal');
+    if (modal) {
+        modal.classList.remove('open');
+        // allow transition to finish then hide fully
+        setTimeout(() => modal.classList.add('hidden'), 220);
+    }
+    
+    // Clear single OTP input
+    const otpInput = document.getElementById('otpInput');
+    if (otpInput) otpInput.value = '';
+    
+    // Stop resend timer
+    if (otpState.resendTimer) {
+        clearInterval(otpState.resendTimer);
+        otpState.resendTimer = null;
+    }
+    
+    // Reset state
+    otpState.email = null;
+    otpState.isSignupFlow = false;
+    try { document.body.style.overflow = ''; } catch (e) {}
+    if (modal) modal.setAttribute('aria-hidden', 'true');
+}
+
+async function verifyOTP() {
+    // Collect OTP from single input field
+    const otpInput = document.getElementById('otpInput');
+    let otp = '';
+    if (otpInput) otp = String(otpInput.value || '').replace(/[^0-9]/g, '');
+    
+    if (!otp || otp.length !== 6) {
+        notify('Please enter a valid 6-digit code', 'warning');
+        return;
+    }
+    
+    if (!otpState.email) {
+        notify('Email not found in session', 'error');
+        return;
+    }
+    
+    try {
+        // Verify OTP against database
+        const result = await apiCall('auth.php', {
+            action: 'verify_otp_for_email',
+            email: otpState.email,
+            otp: otp
+        });
+        
+        if (result.success) {
+            if (otpState.isSignupFlow) {
+                // Create account after verification
+                const signupData = window.pendingSignup;
+                if (!signupData) {
+                    notify('Signup data not found', 'error');
+                    return;
+                }
+                
+                // Create the account
+                const signupResult = await apiCall('auth.php', {
+                    action: 'signup',
+                    firstName: signupData.firstName,
+                    middleName: signupData.middleName,
+                    lastName: signupData.lastName,
+                    phoneNumber: signupData.phoneNumber,
+                    address: signupData.address,
+                    email: signupData.email,
+                    password: signupData.password,
+                    role: signupData.role,
+                    email_verified: true  // Email already verified via OTP
+                });
+                
+                if (signupResult.success) {
+                    notify('Account created successfully! You can now login.', 'success');
+                    
+                    // Clear signup fields
+                    const idsToClear = ['firstName','middleName','lastName','phoneNumber','address','newEmail','newPassword'];
+                    idsToClear.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                    
+                    // Close OTP modal and show login
+                    closeOTPModal();
+                    showLogin();
+                    
+                    // Prefill email on login screen
+                    const emailEl = document.getElementById('email');
+                    if (emailEl) emailEl.value = signupData.email;
+                } else {
+                    notify('Error creating account: ' + (signupResult.message || 'Unknown error'), 'error');
+                }
+            }
+        } else {
+            notify('Invalid OTP: ' + (result.message || 'Please try again'), 'error');
+        }
+    } catch (error) {
+        console.error('OTP verification error:', error);
+        notify('Error verifying OTP: ' + error.message, 'error');
+    }
+}
+
+async function resendOTP() {
+    if (!otpState.email) {
+        notify('Email not found', 'error');
+        return;
+    }
+    
+    if (otpState.resendCooldown > 0) {
+        notify('Please wait before requesting a new code', 'warning');
+        return;
+    }
+    
+    try {
+        const result = await apiCall('auth.php', {
+            action: 'send_otp_to_email',
+            email: otpState.email
+        });
+        
+        if (result.success) {
+            notify('New OTP sent to ' + otpState.email, 'success');
+            
+            // Clear single input and focus
+            const otpInput = document.getElementById('otpInput');
+            if (otpInput) { otpInput.value = ''; otpInput.focus(); }
+            
+            // Restart countdown
+            startResendCountdown();
+        } else {
+            notify('Error: ' + (result.message || 'Failed to resend OTP'), 'error');
+        }
+    } catch (error) {
+        console.error('Resend OTP error:', error);
+        notify('Error resending OTP: ' + error.message, 'error');
+    }
+}
+
+function setupOTPSingleListener() {
+    if (__otpListenersInitialized) {
+        // listeners already attached; just ensure input cleared
+        const existing = document.getElementById('otpInput');
+        if (existing) existing.value = '';
+        return;
+    }
+
+    const otpInput = document.getElementById('otpInput');
+    if (!otpInput) return;
+
+    // Input handler: allow only digits and auto-submit on 6 digits
+    otpInput.addEventListener('input', (e) => {
+        const cleaned = (e.target.value || '').replace(/[^0-9]/g, '');
+        e.target.value = cleaned.slice(0, 6);
+        if (e.target.value.length === 6) {
+            // small delay so UI updates before submit
+            setTimeout(() => verifyOTP(), 180);
+        }
+    });
+
+    otpInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            verifyOTP();
+        }
+        if (e.key === 'Backspace') {
+            // allow natural behavior; no special focus movement needed
+        }
+    });
+
+    otpInput.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const paste = (e.clipboardData || window.clipboardData).getData('text') || '';
+        const digits = paste.replace(/[^0-9]/g, '').slice(0, 6);
+        otpInput.value = digits;
+        if (digits.length === 6) setTimeout(() => verifyOTP(), 120);
+    });
+
+    __otpListenersInitialized = true;
+}
+
+function startResendCountdown() {
+    otpState.resendCooldown = 60;
+    const resendBtn = document.getElementById('resendOTPBtn');
+    const countdownEl = document.getElementById('resendCountdown');
+    const resendTimeEl = document.getElementById('resendTime');
+    
+    if (resendBtn) resendBtn.style.display = 'none';
+    if (countdownEl) countdownEl.style.display = 'block';
+    
+    if (otpState.resendTimer) {
+        clearInterval(otpState.resendTimer);
+    }
+    
+    otpState.resendTimer = setInterval(() => {
+        otpState.resendCooldown--;
+        if (resendTimeEl) {
+            const mins = String(Math.floor(otpState.resendCooldown / 60)).padStart(2, '0');
+            const secs = String(otpState.resendCooldown % 60).padStart(2, '0');
+            resendTimeEl.textContent = `${mins}:${secs}`;
+        }
+        
+        if (otpState.resendCooldown <= 0) {
+            clearInterval(otpState.resendTimer);
+            otpState.resendTimer = null;
+            if (resendBtn) {
+                resendBtn.style.display = 'block';
+                resendBtn.disabled = false;
+            }
+            if (countdownEl) countdownEl.style.display = 'none';
+        }
+    }, 1000);
+}
+
+function resetResendButton() {
+    otpState.resendCooldown = 0;
+    const resendBtn = document.getElementById('resendOTPBtn');
+    const countdownEl = document.getElementById('resendCountdown');
+    
+    if (resendBtn) {
+        resendBtn.disabled = false;
+        resendBtn.style.display = 'block';
+    }
+    if (countdownEl) {
+        countdownEl.style.display = 'none';
+    }
+    
+    if (otpState.resendTimer) {
+        clearInterval(otpState.resendTimer);
+        otpState.resendTimer = null;
+    }
+}
+
 window.Ridesphere = {
     apiCall,
     showSignup,
@@ -2075,6 +2443,10 @@ window.Ridesphere = {
     showOwnerBookings,
     loadOwnerBookings,
     updateBookingStatus,
+    showOTPModalForSignup,
+    closeOTPModal,
+    verifyOTP,
+    resendOTP,
 };
 
 console.log("Ridesphere app loaded successfully!");
@@ -2082,3 +2454,17 @@ console.log("For debugging, use Ridesphere object in console:");
 console.log("  - Ridesphere.getCurrentUser()");
 console.log("  - Ridesphere.getVehicles()");
 console.log("  - Ridesphere.apiCall()");
+
+// Accessibility helper: enable Enter/Space to activate non-button elements with role="button"
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[role="button"]:not(button)').forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
+            }
+        });
+        // Ensure cursor indicates interactivity
+        el.style.cursor = el.style.cursor || 'pointer';
+    });
+});
