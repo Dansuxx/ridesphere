@@ -128,10 +128,17 @@
       <div class="user-nav">
         <span class="user-welcome" id="currentUserName">Welcome, User</span>
         <div id="toggleViewContainer"></div>
-        <button class="btn secondary" onclick="openProfileModal()" id="profileBtn" aria-label="Open profile">
-          <i class="fas fa-user-circle"></i>
-          <span id="profileName" style="margin-left:0.5rem; display:inline-block;">Profile</span>
-        </button>
+        <div id="profileContainer" style="position:relative; display:inline-block;">
+          <button class="btn secondary" onclick="toggleProfileDropdown(event)" id="profileBtn" aria-label="Open profile" aria-haspopup="true" aria-expanded="false">
+            <i class="fas fa-user-circle"></i>
+            <span id="profileName" style="margin-left:0.5rem; display:inline-block;">Profile</span>
+          </button>
+          <div id="profileDropdown" class="profile-dropdown" role="menu" aria-hidden="true" style="display:none; position:absolute; right:0; top:calc(100% + 8px); min-width:160px; background:#fff; border:1px solid rgba(0,0,0,0.08); box-shadow:0 8px 24px rgba(15,23,42,0.08); border-radius:8px; z-index:10000;">
+            <div style="display:flex; flex-direction:column;">
+              <button id="dropdownLogoutBtn" class="dropdown-item" onclick="handleProfileLogout()" style="padding:10px 14px; text-align:left; border:none; background:none; cursor:pointer; width:100%;">Log out</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 

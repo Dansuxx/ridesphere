@@ -338,6 +338,10 @@ function sendOTPToEmailAction($db, $data) {
     require_once 'sendEmailViaPHPMailer.php';
     
     try {
+        // Log incoming data for debugging (local dev)
+        error_log('sendOTPToEmailAction called with: ' . json_encode($data));
+        // Also write a copy into project logs for easier inspection
+        @file_put_contents(__DIR__ . '/logs/last_send_otp_request.json', json_encode(['timestamp' => date('c'), 'payload' => $data], JSON_PRETTY_PRINT));
         $email = isset($data['email']) ? trim($data['email']) : '';
         
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -362,21 +366,46 @@ function sendOTPToEmailAction($db, $data) {
         $stmt = $db->prepare("INSERT INTO otp_pending_emails (email, otp_code, otp_expires) 
                              VALUES (:email, :otp, :expires)
                              ON DUPLICATE KEY UPDATE otp_code = :otp, otp_expires = :expires");
-        $stmt->execute([
+        $executed = $stmt->execute([
             ':email' => $email,
             ':otp' => $otp,
             ':expires' => $expiresAt
         ]);
+
+        // Verify that the row was written; if not, attempt one retry and log diagnostics
+        $verifyStmt = $db->prepare("SELECT otp_code, otp_expires FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email) LIMIT 1");
+        $verifyStmt->execute([':email' => $email]);
+        $verifyRow = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$verifyRow) {
+            error_log('OTP insert appeared to fail on first attempt for: ' . $email . ' - retrying once');
+            // retry
+            $stmt->execute([':email' => $email, ':otp' => $otp, ':expires' => $expiresAt]);
+            $verifyStmt->execute([':email' => $email]);
+            $verifyRow = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+        }
+
+        if (!$verifyRow) {
+            error_log('OTP insert failed after retry for email: ' . $email . ' | last OTP: ' . $otp);
+            @file_put_contents(__DIR__ . '/logs/last_send_otp_error.json', json_encode(['timestamp' => date('c'), 'email' => $email, 'otp' => $otp], JSON_PRETTY_PRINT));
+            echo json_encode(["success" => false, "message" => "Failed to store OTP in database"]);
+            return;
+        }
         
         // Send OTP email
         $result = sendOTPEmail($email, $otp);
+        error_log('sendOTPToEmailAction: sendOTPEmail result for ' . $email . ' => ' . json_encode($result));
         
         if ($result['success']) {
             // Return success and the email so the frontend can reliably open the OTP modal
-            echo json_encode(["success" => true, "message" => "OTP sent to $email", "email" => $email]);
+            $out = ["success" => true, "message" => "OTP sent to $email", "email" => $email];
+            // write response snapshot
+            @file_put_contents(__DIR__ . '/logs/last_send_otp_response.json', json_encode(['timestamp' => date('c'), 'response' => $out, 'mailer' => $result], JSON_PRETTY_PRINT));
+            echo json_encode($out);
         } else {
             // Return a clean error message. Do not emit internal debug information to the client by default.
-            echo json_encode(["success" => false, "message" => $result['message'] ?? "Failed to send OTP"]);
+            $out = ["success" => false, "message" => $result['message'] ?? "Failed to send OTP"];
+            @file_put_contents(__DIR__ . '/logs/last_send_otp_response.json', json_encode(['timestamp' => date('c'), 'response' => $out, 'mailer' => $result], JSON_PRETTY_PRINT));
+            echo json_encode($out);
         }
         
     } catch(Exception $e) {
@@ -387,7 +416,10 @@ function sendOTPToEmailAction($db, $data) {
 
 function verifyOTPForEmailAction($db, $data) {
     try {
-        $email = isset($data['email']) ? trim($data['email']) : '';
+           error_log('verifyOTPForEmailAction called with: ' . json_encode($data));
+           $email = isset($data['email']) ? trim($data['email']) : '';
+        // also write payload to file for easier debugging from workspace
+        @file_put_contents(__DIR__ . '/logs/last_verify_request.json', json_encode(['timestamp' => date('c'), 'payload' => $data], JSON_PRETTY_PRINT));
         // Normalize email to avoid accidental whitespace/casing issues
         $email = filter_var($email, FILTER_SANITIZE_EMAIL);
         $otp = isset($data['otp']) ? trim($data['otp']) : '';
@@ -402,6 +434,8 @@ function verifyOTPForEmailAction($db, $data) {
         $stmt = $db->prepare("SELECT otp_code, otp_expires FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email)");
         $stmt->execute([':email' => $email]);
         $record = $stmt->fetch(PDO::FETCH_ASSOC);
+        error_log('verifyOTPForEmailAction: DB select result for ' . $email . ' => ' . json_encode($record));
+        @file_put_contents(__DIR__ . '/logs/last_verify_db_select.json', json_encode(['timestamp' => date('c'), 'email' => $email, 'record' => $record], JSON_PRETTY_PRINT));
         
         if (!$record) {
             echo json_encode(["success" => false, "message" => "OTP not found for this email"]);
@@ -428,6 +462,7 @@ function verifyOTPForEmailAction($db, $data) {
         // Delete the OTP after successful verification (single-use, case-insensitive)
         $deleteStmt = $db->prepare("DELETE FROM otp_pending_emails WHERE LOWER(email) = LOWER(:email)");
         $deleteStmt->execute([':email' => $email]);
+            error_log('verifyOTPForEmailAction: Deleted OTP row for ' . $email);
 
         // If there is a users record for this email, mark email_verified = 1
         try {

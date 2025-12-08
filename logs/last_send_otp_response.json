@@ -1,0 +1,12 @@
+{
+    "timestamp": "2025-12-08T05:29:59+01:00",
+    "response": {
+        "success": true,
+        "message": "OTP sent to glowentanamanmil08@gmail.com",
+        "email": "glowentanamanmil08@gmail.com"
+    },
+    "mailer": {
+        "success": true,
+        "message": "OTP sent successfully to glowentanamanmil08@gmail.com"
+    }
+}

@@ -350,6 +350,64 @@ function updateHeaderUser(){
     }
 }
 
+// Profile dropdown handling
+function toggleProfileDropdown(e) {
+    try {
+        e && e.stopPropagation && e.stopPropagation();
+        const btn = document.getElementById('profileBtn');
+        const dd = document.getElementById('profileDropdown');
+        if (!dd || !btn) return;
+        const isOpen = dd.style.display && dd.style.display !== 'none';
+        if (isOpen) {
+            dd.style.display = 'none';
+            dd.setAttribute('aria-hidden', 'true');
+            btn.setAttribute('aria-expanded', 'false');
+            document.removeEventListener('click', closeProfileDropdownOnOutsideClick);
+        } else {
+            dd.style.display = 'block';
+            dd.setAttribute('aria-hidden', 'false');
+            btn.setAttribute('aria-expanded', 'true');
+            // position dropdown to avoid overflow
+            const rect = btn.getBoundingClientRect();
+            // simple positioning: keep right aligned
+            dd.style.right = '0px';
+            document.addEventListener('click', closeProfileDropdownOnOutsideClick);
+        }
+    } catch (err) { console.error('toggleProfileDropdown error', err); }
+}
+
+function closeProfileDropdownOnOutsideClick(ev) {
+    const dd = document.getElementById('profileDropdown');
+    const container = document.getElementById('profileContainer');
+    if (!dd || !container) return;
+    if (!container.contains(ev.target)) {
+        dd.style.display = 'none';
+        dd.setAttribute('aria-hidden', 'true');
+        const btn = document.getElementById('profileBtn'); if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeProfileDropdownOnOutsideClick);
+    }
+}
+
+async function handleProfileLogout() {
+    try {
+        // Call server logout endpoint (updates last_logout if user_id provided)
+        const userId = (currentUser && currentUser.id) ? currentUser.id : null;
+        if (userId) {
+            await apiCall('logout.php', { action: 'logout', user_id: userId });
+        } else {
+            // still call endpoint without id for compatibility
+            await apiCall('logout.php', { action: 'logout' });
+        }
+    } catch (err) {
+        console.warn('logout API call failed', err);
+    } finally {
+        // Close dropdown and perform client-side logout
+        const dd = document.getElementById('profileDropdown'); if (dd) { dd.style.display = 'none'; dd.setAttribute('aria-hidden','true'); }
+        const btn = document.getElementById('profileBtn'); if (btn) btn.setAttribute('aria-expanded','false');
+        logout();
+    }
+}
+
 // ----- VEHICLES -----
 // Image preview function
 function previewImage(input) {
