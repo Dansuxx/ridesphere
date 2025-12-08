@@ -57,6 +57,11 @@
     </div>
     
     <div class="form-group">
+      <label for="driverLicense" class="visually-hidden">Driver's license number</label>
+      <input type="text" id="driverLicense" name="driverLicense" class="form-input" placeholder="Driver's License Number (ID)" autocomplete="off">
+    </div>
+    
+    <div class="form-group">
       <label for="address" class="visually-hidden">Address</label>
       <input type="text" id="address" name="address" class="form-input" placeholder="Complete Address" autocomplete="street-address">
     </div>

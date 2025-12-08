@@ -1,8 +1,8 @@
 {
-    "timestamp": "2025-12-08T05:27:15+01:00",
+    "timestamp": "2025-12-08T08:11:41+01:00",
     "payload": {
         "action": "verify_otp_for_email",
-        "email": "danrylboncales@gmail.com",
-        "otp": "634558"
+        "email": "jasykou@gmail.com",
+        "otp": "655759"
     }
 }

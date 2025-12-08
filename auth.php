@@ -69,6 +69,8 @@ function signup($db, $data) {
         $phone_number = $data['phoneNumber'] ?? '';
         $address = $data['address'] ?? '';
         $email = isset($data['email']) ? trim($data['email']) : '';
+        // Accept driver license (either key name)
+        $driver_license = isset($data['driver_license']) ? trim($data['driver_license']) : (isset($data['driverLicense']) ? trim($data['driverLicense']) : '');
         $username = $data['username'] ?? '';
         $password = $data['password'] ?? '';
         $role = $data['role'] ?? 'renter';
@@ -152,35 +154,99 @@ function signup($db, $data) {
             throw new Exception("Password hashing failed");
         }
 
-        if ($hasEmailColumn) {
+            if ($hasEmailColumn) {
             // Use provided email_verified flag (set to true by OTP flow when applicable)
-            $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, email, username, password, role, email_verified) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :email, :username, :password, :role, :email_verified)";
-            $stmt = $db->prepare($query);
-            $result = $stmt->execute([
-                ':first_name' => $first_name,
-                ':middle_name' => $middle_name,
-                ':last_name' => $last_name,
-                ':phone_number' => $phone_number,
-                ':address' => $address,
-                ':email' => $email,
-                ':username' => $usernameToUse,
-                ':password' => $hashed_password,
-                ':role' => $role,
-                ':email_verified' => $email_verified
-            ]);
+                // Include driver_license column if it exists in the users table
+                $drvColQ = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'driver_license'";
+                $drvColStmt = $db->query($drvColQ);
+                $drvColRow = $drvColStmt->fetch(PDO::FETCH_ASSOC);
+                $hasDriverLicenseCol = ($drvColRow && intval($drvColRow['cnt']) > 0);
+
+                if (!$hasDriverLicenseCol && !empty($driver_license)) {
+                    // Attempt to add the column for convenience (non-fatal)
+                    try {
+                        $db->exec("ALTER TABLE users ADD COLUMN driver_license VARCHAR(64) NULL");
+                        $hasDriverLicenseCol = true;
+                    } catch (Exception $e) {
+                        error_log('Could not add driver_license column: ' . $e->getMessage());
+                    }
+                }
+
+                if ($hasDriverLicenseCol) {
+                    $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, email, username, password, role, email_verified, driver_license) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :email, :username, :password, :role, :email_verified, :driver_license)";
+                    $stmt = $db->prepare($query);
+                    $result = $stmt->execute([
+                        ':first_name' => $first_name,
+                        ':middle_name' => $middle_name,
+                        ':last_name' => $last_name,
+                        ':phone_number' => $phone_number,
+                        ':address' => $address,
+                        ':email' => $email,
+                        ':username' => $usernameToUse,
+                        ':password' => $hashed_password,
+                        ':role' => $role,
+                        ':email_verified' => $email_verified,
+                        ':driver_license' => $driver_license
+                    ]);
+                } else {
+                    $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, email, username, password, role, email_verified) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :email, :username, :password, :role, :email_verified)";
+                    $stmt = $db->prepare($query);
+                    $result = $stmt->execute([
+                        ':first_name' => $first_name,
+                        ':middle_name' => $middle_name,
+                        ':last_name' => $last_name,
+                        ':phone_number' => $phone_number,
+                        ':address' => $address,
+                        ':email' => $email,
+                        ':username' => $usernameToUse,
+                        ':password' => $hashed_password,
+                        ':role' => $role,
+                        ':email_verified' => $email_verified
+                    ]);
+                }
         } else {
-            $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, username, password, role) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :username, :password, :role)";
-            $stmt = $db->prepare($query);
-            $result = $stmt->execute([
-                ':first_name' => $first_name,
-                ':middle_name' => $middle_name,
-                ':last_name' => $last_name,
-                ':phone_number' => $phone_number,
-                ':address' => $address,
-                ':username' => $usernameToUse,
-                ':password' => $hashed_password,
-                ':role' => $role
-            ]);
+            // Legacy DB without email column - attempt to add driver_license if available
+            $drvColQ = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'driver_license'";
+            $drvColStmt = $db->query($drvColQ);
+            $drvColRow = $drvColStmt->fetch(PDO::FETCH_ASSOC);
+            $hasDriverLicenseCol = ($drvColRow && intval($drvColRow['cnt']) > 0);
+            if (!$hasDriverLicenseCol && !empty($driver_license)) {
+                try {
+                    $db->exec("ALTER TABLE users ADD COLUMN driver_license VARCHAR(64) NULL");
+                    $hasDriverLicenseCol = true;
+                } catch (Exception $e) {
+                    error_log('Could not add driver_license column (legacy): ' . $e->getMessage());
+                }
+            }
+
+            if ($hasDriverLicenseCol) {
+                $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, username, password, role, driver_license) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :username, :password, :role, :driver_license)";
+                $stmt = $db->prepare($query);
+                $result = $stmt->execute([
+                    ':first_name' => $first_name,
+                    ':middle_name' => $middle_name,
+                    ':last_name' => $last_name,
+                    ':phone_number' => $phone_number,
+                    ':address' => $address,
+                    ':username' => $usernameToUse,
+                    ':password' => $hashed_password,
+                    ':role' => $role,
+                    ':driver_license' => $driver_license
+                ]);
+            } else {
+                $query = "INSERT INTO users (first_name, middle_name, last_name, phone_number, address, username, password, role) VALUES (:first_name, :middle_name, :last_name, :phone_number, :address, :username, :password, :role)";
+                $stmt = $db->prepare($query);
+                $result = $stmt->execute([
+                    ':first_name' => $first_name,
+                    ':middle_name' => $middle_name,
+                    ':last_name' => $last_name,
+                    ':phone_number' => $phone_number,
+                    ':address' => $address,
+                    ':username' => $usernameToUse,
+                    ':password' => $hashed_password,
+                    ':role' => $role
+                ]);
+            }
         }
 
         if ($result) {
@@ -357,6 +423,28 @@ function sendOTPToEmailAction($db, $data) {
             otp_expires DATETIME NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )");
+        
+        // Prevent sending OTP to an email that already has an account.
+        // Check if the users table has an email column; if so, perform a case-insensitive lookup.
+        try {
+            $colCheckQ = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'email'";
+            $colStmt = $db->query($colCheckQ);
+            $colRow = $colStmt->fetch(PDO::FETCH_ASSOC);
+            $hasEmailColumn = ($colRow && intval($colRow['cnt']) > 0);
+            if ($hasEmailColumn) {
+                $existsStmt = $db->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:email) LIMIT 1");
+                $existsStmt->execute([':email' => $email]);
+                $existingUser = $existsStmt->fetch(PDO::FETCH_ASSOC);
+                if ($existingUser) {
+                    // Do not send OTP — email already registered
+                    echo json_encode(["success" => false, "message" => "An account with this email already exists"]);
+                    return;
+                }
+            }
+        } catch (Exception $e) {
+            // Non-fatal: log and continue; if something goes wrong with the check, we still attempt to send OTP
+            error_log('sendOTPToEmailAction: email-exists check failed: ' . $e->getMessage());
+        }
         
         // Generate OTP
         $otp = generateOTP();

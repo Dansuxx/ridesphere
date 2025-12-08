@@ -28,6 +28,7 @@ try {
         password VARCHAR(255) NOT NULL,
         role ENUM('renter', 'owner') DEFAULT 'renter',
         email_verified TINYINT(1) DEFAULT 0,
+        driver_license VARCHAR(64),
         otp_code VARCHAR(6),
         otp_expires DATETIME,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

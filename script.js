@@ -13,6 +13,31 @@ let currentSort = 'name';
 // This lets the UI and booking calls use that id when creating or listing renter bookings.
 let actingRenterId = null;
 
+// Cleanup any stray debug overlay left from older runs (defensive)
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const old = document.getElementById('otpDebugOverlay');
+        if (old) {
+            old.remove();
+            console.log('Removed stale otpDebugOverlay element');
+        }
+        // Remove any node whose text starts with 'OTP modal opened'
+        const nodes = Array.from(document.querySelectorAll('body *'));
+        for (const n of nodes) {
+            try {
+                if (n && n.textContent && n.textContent.trim().startsWith('OTP modal opened')) {
+                    n.remove();
+                    console.log('Removed stray debug node with OTP modal text');
+                }
+            } catch (e) {}
+        }
+    } catch (e) {
+        console.warn('Error cleaning up debug overlay:', e);
+    }
+});
+
+// (MutationObserver removed)
+
 // API Helper Functions
 async function apiCall(endpoint, data = {}) {
     try {
@@ -113,6 +138,7 @@ async function signup(event){
     const middleName = getInputValue("middleName");
     const lastName = getInputValue("lastName");
     const phoneNumber = getInputValue("phoneNumber");
+    const driverLicense = getInputValue("driverLicense");
     const address = getInputValue("address");
     const email = getInputValue("newEmail");
     const password = getInputValue("newPassword");
@@ -126,7 +152,7 @@ async function signup(event){
     }
 
     // Store signup data for later account creation after OTP verification
-    window.pendingSignup = { firstName, middleName, lastName, phoneNumber, address, email, password, role };
+    window.pendingSignup = { firstName, middleName, lastName, phoneNumber, driverLicense, address, email, password, role };
 
     // Show loading state
     const signupBtn = document.querySelector('#signupScreen .btn.primary');
@@ -137,47 +163,45 @@ async function signup(event){
     }
 
     try {
-        // Send OTP to email first (start request then show modal immediately)
-        const callPromise = apiCall('auth.php', {
+        // Send OTP to email and WAIT for server response before opening modal.
+        // This ensures any server-side errors (e.g., "account exists") are shown
+        // to the user before the OTP modal appears.
+        const result = await apiCall('auth.php', {
             action: 'send_otp_to_email',
             email
         });
 
-        // Immediately show the OTP modal as a UX improvement so user can enter code
-        // (it will also act as a fallback during delivery failures)
-        try { showOTPModalForSignup(email); } catch (e) { console.warn('showOTPModalForSignup failed early:', e); }
-
-        const result = await callPromise;
-
         console.log('send_otp_to_email response:', result);
 
-        if(result && result.success) {
+        if (result && result.success) {
             const targetEmail = (result.email && result.email.length) ? result.email : email;
+            // Now open the modal after the server confirms the OTP was stored/sent
+            try { showOTPModalForSignup(targetEmail); } catch (e) { console.warn('showOTPModalForSignup failed:', e); }
             notify("OTP sent to " + targetEmail, 'success');
             // Ensure modal shows the server-provided email
             try { document.getElementById('otpEmailDisplay').textContent = targetEmail; } catch (e) {}
         } else {
+            // Show server-provided error BEFORE any modal appears
             notify("Error: " + (result && result.message ? result.message : "Failed to send OTP"), 'error');
-            // show an inline banner inside the modal for clarity
+            // Optionally, surface the error near the signup form for clarity
             try {
-                const modal = document.getElementById('otpModal');
-                if (modal) {
-                    let banner = document.getElementById('otpErrorBanner');
+                const signupBox = document.getElementById('signupScreen');
+                if (signupBox) {
+                    let banner = document.getElementById('signupOtpErrorBanner');
                     if (!banner) {
                         banner = document.createElement('div');
-                        banner.id = 'otpErrorBanner';
+                        banner.id = 'signupOtpErrorBanner';
                         banner.style.background = '#fff3f2';
                         banner.style.color = '#7f1d1d';
-                        banner.style.padding = '8px 12px';
+                        banner.style.padding = '10px 12px';
                         banner.style.borderRadius = '8px';
-                        banner.style.marginTop = '12px';
+                        banner.style.margin = '10px 0';
                         banner.style.textAlign = 'center';
-                        const content = modal.querySelector('.modal-content');
-                        if (content) content.insertBefore(banner, content.querySelector('#otpBoxesContainer'));
+                        signupBox.insertBefore(banner, signupBox.firstChild);
                     }
-                    banner.textContent = 'We could not send the OTP email. You can enter a test OTP here or try Resend.';
+                    banner.textContent = result && result.message ? result.message : 'Unable to send OTP. Please try again.';
                 }
-            } catch (e) { console.error('Failed to show OTP error banner:', e); }
+            } catch (e) { console.error('Failed to show signup OTP error banner:', e); }
         }
     } catch (error) {
         console.error('Signup error:', error);
@@ -2127,32 +2151,7 @@ function showOTPModalForSignup(email) {
         return;
     }
 
-    // Temporary debug overlay: visible even if modal is somehow hidden by CSS
-    try {
-        let dbg = document.getElementById('otpDebugOverlay');
-        if (!dbg) {
-            dbg = document.createElement('div');
-            dbg.id = 'otpDebugOverlay';
-            dbg.style.position = 'fixed';
-            dbg.style.right = '12px';
-            dbg.style.top = '12px';
-            dbg.style.background = 'rgba(220,38,38,0.95)';
-            dbg.style.color = 'white';
-            dbg.style.padding = '10px 14px';
-            dbg.style.borderRadius = '8px';
-            dbg.style.zIndex = '10000000';
-            dbg.style.fontWeight = '700';
-            dbg.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
-            dbg.style.pointerEvents = 'none';
-            document.body.appendChild(dbg);
-        }
-        dbg.textContent = 'OTP modal opened for ' + (email || '(no email)');
-        // auto-remove after 6s
-        setTimeout(() => {
-            const el = document.getElementById('otpDebugOverlay');
-            if (el) el.remove();
-        }, 6000);
-    } catch (e) { console.warn('Could not create otp debug overlay', e); }
+    // (debug overlay removed) modal now opens without creating a top notification
 
     // Set email display
     const emailDisplay = document.getElementById('otpEmailDisplay');
@@ -2296,13 +2295,14 @@ async function verifyOTP() {
                     return;
                 }
                 
-                // Create the account
+                // Create the account (include driver license if provided)
                 const signupResult = await apiCall('auth.php', {
                     action: 'signup',
                     firstName: signupData.firstName,
                     middleName: signupData.middleName,
                     lastName: signupData.lastName,
                     phoneNumber: signupData.phoneNumber,
+                    driver_license: signupData.driverLicense || signupData.driver_license || '',
                     address: signupData.address,
                     email: signupData.email,
                     password: signupData.password,
@@ -2314,7 +2314,7 @@ async function verifyOTP() {
                     notify('Account created successfully! You can now login.', 'success');
                     
                     // Clear signup fields
-                    const idsToClear = ['firstName','middleName','lastName','phoneNumber','address','newEmail','newPassword'];
+                    const idsToClear = ['firstName','middleName','lastName','phoneNumber','driverLicense','address','newEmail','newPassword'];
                     idsToClear.forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.value = '';
